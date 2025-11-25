@@ -1,0 +1,56 @@
+{
+    "name": "phprsa/id-validator",
+    "description": "Professional South African RSA ID Number Validation Library with Luhn algorithm, date validation, and component extraction",
+    "type": "library",
+    "keywords": [
+        "south africa",
+        "rsa",
+        "id",
+        "validation",
+        "luhn",
+        "id number",
+        "validator",
+        "south african id"
+    ],
+    "homepage": "https://github.com/phprsa/id-validator",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Lwando Nkenjana",
+            "email": "lwandonkenjana@gmail.com",
+            "homepage": "https://www.nitstechsystems.co.za",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpRsaIdValidator\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpRsaIdValidator\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit tests/",
+        "test-coverage": "phpunit tests/ --coverage-html coverage"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0.x-dev"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
