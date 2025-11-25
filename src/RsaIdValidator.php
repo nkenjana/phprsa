@@ -10,7 +10,7 @@
  * @copyright   2024 NITS Tech Systems
  * @license     MIT
  * @version     1.0.0
- * @link        https://github.com/yourusername/phprsa-id-validator
+ * @link        https://github.com/nkenjana/phprsa-id-validator
  */
 
 declare(strict_types=1);
@@ -25,7 +25,7 @@ use InvalidArgumentException;
  * 
  * Validates South African ID numbers according to official specifications:
  * - Format: YYMMDDSSSSCAZ
- * - Luhn algorithm verification
+ * - Luhn algorithm verification (SA variant)
  * - Date validation with century determination
  * - Gender and citizenship extraction
  * 
@@ -43,19 +43,6 @@ final class RsaIdValidator
      * @param string $id The ID number to validate
      * @return array Validation result with extracted information
      * @throws InvalidArgumentException If input is not a string
-     * 
-     * @example
-     * $validator = new RsaIdValidator();
-     * $result = $validator->validate('9001014800081');
-     * 
-     * Returns:
-     * [
-     *     'valid' => true,
-     *     'date_of_birth' => '1990-01-01',
-     *     'gender' => 'Male',
-     *     'citizenship' => 'SA Citizen',
-     *     'check_digit' => '1'
-     * ]
      */
     public function validate(string $id): array
     {
@@ -87,7 +74,7 @@ final class RsaIdValidator
                 ];
             }
 
-            // Validate check digit using Luhn algorithm
+            // Validate check digit using SA Luhn algorithm
             if (!$this->validateLuhn($id)) {
                 return [
                     'valid' => false, 
@@ -160,10 +147,6 @@ final class RsaIdValidator
      */
     private function determineCentury(string $yy, string $mm, string $dd): int
     {
-        $currentYear = (int)date('Y');
-        $currentMonth = (int)date('m');
-        $currentDay = (int)date('d');
-        
         $candidateYear20xx = (int)('20' . $yy);
         $candidateYear19xx = (int)('19' . $yy);
         
@@ -172,7 +155,6 @@ final class RsaIdValidator
         $age19xx = $this->calculateAge($candidateYear19xx, (int)$mm, (int)$dd);
         
         // Prefer the century that gives a reasonable age (0-122 years)
-        // and where the birth date has already occurred
         if ($age20xx >= 0 && $age20xx <= 122) {
             return $candidateYear20xx;
         }
@@ -216,34 +198,53 @@ final class RsaIdValidator
     }
 
     /**
-     * Validates ID number using Luhn algorithm
+     * Validates ID number using the official South African Luhn variant
+     * 
+     * Algorithm:
+     * 1) Sum digits in odd positions (1,3,5,7,9,11) — note: positions are 1-indexed
+     * 2) Concatenate digits in even positions (2,4,6,8,10,12) into a number, multiply by 2
+     * 3) Sum the digits of that product
+     * 4) Add results of step 1 and 3, compute (10 - (total % 10)) % 10 → this is expected check digit
+     * 5) Compare with last digit (position 13)
      * 
      * @param string $id The ID number to validate
      * @return bool True if Luhn check passes
      */
     private function validateLuhn(string $id): bool
     {
-        $sum = 0;
-        $length = strlen($id);
-        
-        for ($i = 0; $i < $length - 1; $i++) {
-            $digit = (int)$id[$i];
-            
-            // Double every second digit from the right
-            if ($i % 2 === 0) {
-                $digit *= 2;
-                if ($digit > 9) {
-                    $digit -= 9;
-                }
-            }
-            
-            $sum += $digit;
+        // Ensure we have 13 digits
+        if (strlen($id) !== self::ID_LENGTH) {
+            return false;
         }
-        
-        $checkDigit = (int)$id[$length - 1];
-        $calculatedCheckDigit = (10 - ($sum % 10)) % 10;
-        
-        return $checkDigit === $calculatedCheckDigit;
+
+        // 1) Sum digits in odd positions (1,3,5,7,9,11) -> zero-based indices 0,2,4,6,8,10
+        $sumOdd = 0;
+        for ($i = 0; $i <= 10; $i += 2) {
+            $sumOdd += (int)$id[$i];
+        }
+
+        // 2) Concatenate even position digits (2,4,6,8,10,12) -> indices 1,3,5,7,9,11
+        $evenConcat = '';
+        for ($i = 1; $i <= 11; $i += 2) {
+            $evenConcat .= $id[$i];
+        }
+
+        // Multiply the concatenated number by 2
+        $evenProduct = (string)(((int)$evenConcat) * 2);
+
+        // 3) Sum digits of the product
+        $sumEvenDigits = 0;
+        $digits = str_split($evenProduct);
+        foreach ($digits as $d) {
+            $sumEvenDigits += (int)$d;
+        }
+
+        // 4) Add sums and compute check digit
+        $total = $sumOdd + $sumEvenDigits;
+        $calculatedCheck = (10 - ($total % 10)) % 10;
+
+        // 5) Compare with last digit (index 12)
+        return $calculatedCheck === (int)$id[12];
     }
 
     /**
