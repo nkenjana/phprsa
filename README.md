@@ -210,16 +210,3 @@ composer.lock
 .idea/
 ```
 
----
-
-## Author
-
-NITS TECH SYSTEMS
-[https://www.nitstechsystems.co.za](https://www.nitstechsystems.co.za)
-
-For support or integration assistance: [lwandonkenjana@gmail.com](mailto:lwandonkenjana@gmail.com)
-
-```
-
----
-
