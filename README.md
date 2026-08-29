@@ -1,26 +1,32 @@
+# PHP RSA ID Validator
 
-````md
-
-# **PHP RSA ID Validator**
-````
-![PHP Version](https://img.shields.io/badge/PHP-8.0%2B-blue.svg)
+![PHP Version](https://img.shields.io/badge/PHP-8.1%2B-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Packagist](https://img.shields.io/badge/Packagist-Ready-orange.svg)
 
-A professional, lightweight PHP library for validating South African ID numbers.
-It performs full structural checks, validates birth dates, determines gender, identifies citizenship, and verifies the Luhn check digit. Ideal for forms, authentication systems, HR platforms, and any application requiring reliable South African ID verification.
-
+A lightweight PHP library for validating South African ID numbers. It performs
+full structural checks, validates birth dates (with correct century
+resolution), determines gender, identifies citizenship, and verifies the
+Luhn check digit. Ideal for forms, authentication systems, HR platforms, and
+any application requiring reliable South African ID verification.
 
 ---
 
 ## Features
 
-- Validates full RSA ID format (YYMMDDSSSGC A)
-- Birth date extraction with automatic century detection
-- Gender identification based on sequence number
-- Citizen vs resident status
+- Validates full RSA ID format (`YYMMDDSSSSCAZ`)
+- Birth date extraction with century detection that correctly rejects
+  future-dated interpretations
+- Gender identification based on the sequence number
+- Citizen vs. permanent resident status
 - Full Luhn algorithm check digit validation
-- JSON API support
+- Typed, immutable result object — no more guessing at array keys
+
+---
+
+## Requirements
+
+- PHP **8.1** or later
 
 ---
 
@@ -30,183 +36,116 @@ It performs full structural checks, validates birth dates, determines gender, id
 
 ```bash
 composer require phprsa/id-validator
-````
+```
 
-### Manual Load
+### Manual load
 
-If you’re not using Composer, include the file directly:
+If you're not using Composer, require the three source files directly
+(in this order, since `RsaIdValidator` depends on the other two):
 
 ```php
-require 'vendor/phprsa/id-validator/src/RsaIdValidator.php';
+require 'src/Gender.php';
+require 'src/Citizenship.php';
+require 'src/IdValidationResult.php';
+require 'src/RsaIdValidator.php';
 ```
 
 ---
 
-## Usage Example
+## Usage
 
 ```php
 use PhpRsaIdValidator\RsaIdValidator;
 
 $validator = new RsaIdValidator();
-$result = $validator->validate('9001014800085');
+$result = $validator->validate('9001015800088');
 
-if ($result['valid']) {
-    echo "ID is valid";
+if ($result->valid) {
+    echo $result->dateOfBirth->format('Y-m-d'); // 1990-01-01
+    echo $result->gender->value;                // Male
+    echo $result->citizenship->value;           // SA Citizen
 } else {
-    echo "Error: " . $result['error'];
+    echo "Error: {$result->error}";
 }
 ```
 
----
+`validate()` returns an `IdValidationResult` object rather than a bare array,
+so your editor can autocomplete the available fields and typos fail at
+static-analysis time instead of silently returning `null`:
 
-## API Endpoint
+| Property        | Type                 | Notes                                  |
+|-----------------|----------------------|-----------------------------------------|
+| `valid`         | `bool`               | Always present                          |
+| `idNumber`      | `?string`            | Present only when `valid` is `true`     |
+| `dateOfBirth`   | `?DateTimeImmutable` | Present only when `valid` is `true`     |
+| `gender`        | `?Gender`            | Backed enum: `Gender::Male` / `Gender::Female` |
+| `citizenship`   | `?Citizenship`       | Backed enum: `Citizenship::Citizen` / `Citizenship::PermanentResident` |
+| `checkDigit`    | `?int`               | Present only when `valid` is `true`     |
+| `error`         | `?string`            | Present only when `valid` is `false`    |
 
-This project includes a working API endpoint for remote validation.
+### Quick boolean check
 
-### `id-api.php`
+If you just need a yes/no answer, skip the object entirely:
 
 ```php
-<?php
-require __DIR__ . '/vendor/autoload.php';
-
-use PhpRsaIdValidator\RsaIdValidator;
-
-header('Content-Type: application/json');
-
-$data = json_decode(file_get_contents('php://input'), true);
-$id   = $data['id'] ?? null;
-
-if (!$id) {
-    echo json_encode([
-        'success' => false,
-        'error'   => 'No ID number supplied'
-    ]);
-    exit;
-}
-
-$validator = new RsaIdValidator();
-echo json_encode($validator->validate($id), JSON_PRETTY_PRINT);
-```
-
-### Example Request
-
-```
-POST /id-api.php
-Content-Type: application/json
-```
-
-```json
-{
-    "id": "9001014800085"
+if (RsaIdValidator::isValid($submittedId)) {
+    // proceed
 }
 ```
 
-### Example Response
+### Migrating from v1.x (array-based results)
 
-```json
-{
-    "valid": true,
-    "id_number": "9001014800085",
-    "date_of_birth": "1990-01-01",
-    "gender": "Male",
-    "citizenship": "SA Citizen",
-    "check_digit": 5
-}
-```
-
----
-
-## Browser Test Page (`id.php`)
-
-A small interface for manual validation:
+v1.x returned a plain associative array. If you're not ready to switch call
+sites over to the typed properties yet, `toArray()` reproduces the old shape:
 
 ```php
-<?php
-require __DIR__ . '/vendor/autoload.php';
-
-use PhpRsaIdValidator\RsaIdValidator;
-
-$id       = $_GET['id'] ?? null;
-$validator = new RsaIdValidator();
-$result    = $id ? $validator->validate($id) : null;
-?>
-<!DOCTYPE html>
-<html>
-<head>
-    <title>RSA ID Validator</title>
-    <style>
-        body { font-family: Arial; margin: 40px; }
-        input { padding: 8px; width: 260px; }
-        button { padding: 8px 18px; }
-        .box { margin-top: 20px; padding: 15px; border-radius: 6px; }
-        .ok { background: #d4edda; }
-        .bad { background: #f8d7da; }
-    </style>
-</head>
-<body>
-
-<h2>RSA ID Validator</h2>
-
-<form method="GET">
-    <input type="text" name="id" placeholder="Enter ID" value="<?= htmlspecialchars($id) ?>">
-    <button type="submit">Check</button>
-</form>
-
-<?php if ($result): ?>
-<div class="box <?= $result['valid'] ? 'ok' : 'bad' ?>">
-    <?php if ($result['valid']): ?>
-        <strong>Valid</strong><br><br>
-        ID: <?= $result['id_number'] ?><br>
-        DOB: <?= $result['date_of_birth'] ?><br>
-        Gender: <?= $result['gender'] ?><br>
-        Citizenship: <?= $result['citizenship'] ?><br>
-        Check Digit: <?= $result['check_digit'] ?><br>
-    <?php else: ?>
-        <strong>Invalid</strong><br><br>
-        <?= $result['error'] ?>
-    <?php endif; ?>
-</div>
-<?php endif; ?>
-
-</body>
-</html>
+$array = $validator->validate($id)->toArray();
+// ['valid' => true, 'id_number' => ..., 'date_of_birth' => 'Y-m-d string', 'gender' => 'Male', 'citizenship' => 'SA Citizen', 'check_digit' => 8]
 ```
 
 ---
 
-## Test Client (`test-api.php`)
+## A note on century ambiguity
 
-```php
-<?php
+An RSA ID number only stores a two-digit year, so a year like `35` is
+genuinely ambiguous between 1935 and 2035 — the ID number alone can't tell
+you which. This library resolves that the only sound way it can: a
+candidate century is rejected outright if it would place the birth date in
+the **future**, and otherwise accepted if it produces a plausible age (0–122
+years). Where both centuries remain plausible, 2000s is preferred, since
+that's the more common case in practice. If your application needs different
+disambiguation rules (e.g. always assuming the older century for a
+particular use case), you'll want to layer that logic on top of
+`dateOfBirth` yourself.
 
-$url = "https://yourdomain.com/id-api.php";
+---
 
-$payload = json_encode(["id" => "9001014800085"]);
+## Demo
 
-$ch = curl_init($url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+`demo/index.php` is a small self-contained web page for manual testing. It's
+for demonstration only — remove it or put it behind auth before deploying
+anywhere near production, since it accepts raw ID numbers over POST.
 
-$response = curl_exec($ch);
-curl_close($ch);
-
-echo "<pre>";
-print_r(json_decode($response, true));
-echo "</pre>";
+```bash
+php -S localhost:8000 -t demo
+# then visit http://localhost:8000
 ```
 
 ---
 
-## .gitignore
+## Running the tests
 
-```
-vendor/
-composer.lock
-.env
-*.log
-.DS_Store
-.idea/
+```bash
+composer install
+composer test
 ```
 
+All sample IDs in the test suite are real, independently-verified numbers
+(checked against the Luhn variant documented in
+`RsaIdValidator::validateLuhn()`) — not placeholders.
+
+---
+
+## License
+
+MIT
